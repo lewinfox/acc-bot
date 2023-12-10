@@ -9,6 +9,7 @@ from langchain.embeddings import OpenAIEmbeddings
 from langchain.schema import StrOutputParser
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.vectorstores import Chroma
+from openai import RateLimitError
 
 
 def discover_documents(dir: str = "documents"):
@@ -29,10 +30,10 @@ def load_pdf(file: str):
     return pages
 
 
-def read_all_docs():
+def read_all_docs(dir: str = "documents"):
     """Read and parse all documents"""
     res = []
-    for d in discover_documents():
+    for d in discover_documents(dir):
         res.extend(load_pdf(d))
     return res
 
@@ -40,7 +41,17 @@ def read_all_docs():
 def setup():
     """Get the model ready to answer questions"""
     docs = read_all_docs()
-    vector_store = Chroma.from_documents(documents=docs, embedding=OpenAIEmbeddings())
+    while True:
+        try:
+            vector_store = Chroma.from_documents(
+                documents=docs, embedding=OpenAIEmbeddings()
+            )
+            break
+        except RateLimitError as e:
+            print("Too many tokens:", e["error"]["message"])
+            # Chuck away half
+            docs = docs[0 : len(docs) // 2]
+
     retriever = vector_store.as_retriever()
     prompt = hub.pull("rlm/rag-prompt")
     llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
