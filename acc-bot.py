@@ -52,17 +52,10 @@ def setup():
 
     split_docs = splitter.split_documents(docs)
 
-    # Handle token rate limits by chucking away half the documents if we
-    # encounter an error.
-    while True:
-        try:
-            vector_store = Chroma.from_documents(
-                documents=split_docs, embedding=OpenAIEmbeddings()
-            )
-            break
-        except RateLimitError as e:
-            print("Too many tokens:", e["error"]["message"])
-            split_docs = split_docs[0 : len(split_docs) // 2]
+    print("Adding documents to vector database")
+    vector_store = Chroma.from_documents(
+        documents=split_docs, embedding=OpenAIEmbeddings()
+    )
 
     # The retriever object queries the vector db for us when we pass it a
     # prompt. We could use a MultiQueryRetriever (https://python.langchain.com/docs/modules/data_connection/retrievers/MultiQueryRetriever)
