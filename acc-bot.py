@@ -10,6 +10,7 @@ from langchain.schema import StrOutputParser
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.vectorstores import Chroma
 from openai import RateLimitError
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 
 def discover_documents(dir: str = "documents"):
@@ -41,16 +42,26 @@ def read_all_docs(dir: str = "documents"):
 def setup():
     """Get the model ready to answer questions"""
     docs = read_all_docs()
+
+    # Split docs into overlapping chunks. These chunks will be added to the
+    # vector db (chroma). We will use Chroma to retrieve only the most relevant
+    # chunks for each prompt. This makes the queries more efficient
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000, chunk_overlap=200, add_start_index=True
+    )
+
+    split_docs = splitter.split_documents(docs)
+
     while True:
         try:
             vector_store = Chroma.from_documents(
-                documents=docs, embedding=OpenAIEmbeddings()
+                documents=split_docs, embedding=OpenAIEmbeddings()
             )
             break
         except RateLimitError as e:
             print("Too many tokens:", e["error"]["message"])
             # Chuck away half
-            docs = docs[0 : len(docs) // 2]
+            split_docs = split_docs[0 : len(split_docs) // 2]
 
     retriever = vector_store.as_retriever()
     prompt = hub.pull("rlm/rag-prompt")
